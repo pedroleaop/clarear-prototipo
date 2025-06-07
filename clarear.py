@@ -1,9 +1,8 @@
-import openai
-import os
+from openai import OpenAI
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI()
 
-response = openai.ChatCompletion.create(
+response = client.chat.completions.create(
     model="gpt-4o-mini",
     messages=[
         {"role": "system", "content": "Você é um assistente útil."},
