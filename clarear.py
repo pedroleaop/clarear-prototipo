@@ -18,7 +18,9 @@ st.set_page_config(
 # --- URL da Imagem do Cabeçalho ---
 HEADER_IMAGE_URL = "https://iili.io/F3E96dP.png"
 
-# --- CSS para Estilo Pastel (Azul e Laranja), Ajustes de Texto/Caixas e Centralização ---
+# --- CSS para Estilo Pastel (Copiar do inicial.py para consistência) ---
+# Este bloco de estilo deve ser IDÊNTICO ao do inicial.py.
+
 st.markdown(
     """
     <style>
@@ -172,24 +174,32 @@ st.markdown(
 # model = genai.GenerativeModel('gemini-1.5-flash-latest') 
 
 # --- Inicialização do Estado da Sessão (Crucial para Streamlit!) ---
-if "messages" not in st.session_state:
-    st.session_state.messages = [] 
+# A página clarear.py (dashboard) só é acessada se o login_user_name já estiver definido.
+# Se não estiver, redireciona de volta para a página inicial (inicial.py).
+if "logged_in_user_name" not in st.session_state or not st.session_state.logged_in_user_name:
+    st.warning("Por favor, faça o login na página inicial para acessar o dashboard.")
+    if st.button("Ir para Página Inicial"):
+        st.session_state.go_to_dashboard = False # Sinaliza para inicial.py que deve ser a próxima
+        st.rerun() # Força o rerun para inicial.py
+    st.stop() # Interrompe a execução desta página se não estiver logado
 
-if "user_info_collected" not in st.session_state:
-    st.session_state.user_info_collected = False 
-
+# Se chegou até aqui, o usuário está logado.
+# Inicializa user_data APENAS SE AINDA NÃO FOI INICIALIZADO para esta sessão.
 if "user_data" not in st.session_state:
     st.session_state.user_data = {
-        "nome": "",
+        "nome": st.session_state.logged_in_user_name, # Usa o nome do login
         "idade": "",
         "dificuldades": [], 
-        "current_stage": "greeting", 
+        "current_page": "main_dashboard", # Define a página atual como dashboard
+        "current_stage": "ask_age", # Começa o fluxo do chat a partir da idade
         "active_exercise": None,     
         "exercise_data": {},         
         "performance_history": {}    
     }
+# Mantenha esta checagem para pending_exercise_area separada da inicialização principal
 if "pending_exercise_area" not in st.session_state:
     st.session_state.pending_exercise_area = None
+
 
 # --- Funções de Áudio ---
 def play_text_as_audio_button(text_to_speak, message_id):
@@ -236,7 +246,7 @@ def send_message_to_clarear(message_content, role="ClareAR", with_audio_button=T
     st.session_state.messages.append({"role": role, "content": message_content})
     
 
-# --- Funções de Simulação de IA (NOVA Seção para testes sem API) ---
+# --- Funções de Simulação de IA (para testes sem API) ---
 def generate_simulated_exercise(difficulty_area):
     """
     Simula a geração de um exercício por IA, sem chamar a API.
@@ -249,18 +259,18 @@ def generate_simulated_exercise(difficulty_area):
         ],
         "atenção": [
             {"name": "Contagem de Vogais", "instructions": "Quantas vogais (a, e, i, o, u) existem na frase a seguir?", "content": "A águia voa alto sobre a montanha.", "domain": "atenção", "expected_answer": "12"},
-            {"name": "Encontre o Número Faltante", "instructions": "Qual número está faltando na sequência: 1, 2, 3, __, 5, 6?", "content": "1, 2, 3, __, 5, 6", "domain": "atenção", "expected_answer": "4"},
+            {"name": "Encontre o Número Faltante", "instructions": "Qual número está faltando na sequência: 1, 2, 3, __, 5, 6?", "content": "1, 2, 3, 4, 5, 6", "domain": "atenção", "expected_answer": "4"}, 
         ],
         "raciocínio": [
             {"name": "Charada Básica", "instructions": "O que é, o que é: Anda e não tem pés, voa e não tem asas?", "content": "O que é, o que é: Anda e não tem pés, voa e não tem asas?", "domain": "raciocínio", "expected_answer": "fumaça"},
-            {"name": "Padrão Numérico Simples", "instructions": "Continue a sequência lógica: 3, 6, 9, 12, __?", "content": "3, 6, 9, 12, __?", "domain": "raciocínio", "expected_answer": "15"},
+            {"name": "Padrão Numérico Simples", "instructions": "Continue a sequência lógica: 3, 6, 9, 12, __?", "content": "3, 6, 9, 12", "domain": "raciocínio", "expected_answer": "15"}, 
         ],
         "orientação": [
             {"name": "Orientação Temporal", "instructions": "Qual é o dia da semana hoje?", "content": "Qual é o dia da semana hoje?", "domain": "orientação", "expected_answer": time.strftime("%A").lower()}, # Resposta dinâmica
-            {"name": "Orientação Espacial", "instructions": "Em que cidade você está agora?", "content": "Em que cidade você está agora?", "domain": "orientação", "expected_answer": "recife"} # Exemplo, adaptar
+            {"name": "Orientação Espacial", "instructions": "Em que cidade você está agora?", "content": "Em que cidade você está agora?", "domain": "orientação", "expected_answer": "recife"} 
         ]
     }
-    return random.choice(exercises_by_domain.get(difficulty_area.lower(), exercises_by_domain["memória"])) # Fallback para memória
+    return random.choice(exercises_by_domain.get(difficulty_area.lower(), exercises_by_domain["memória"])) 
 
 def generate_simulated_feedback(performance, exercise_name, user_response, expected_answer):
     """
@@ -271,17 +281,11 @@ def generate_simulated_feedback(performance, exercise_name, user_response, expec
     else:
         return f"Tudo bem, às vezes erramos! Você respondeu '{user_response}', mas a resposta esperada era '{expected_answer}'. A prática leva à perfeição. Que tal tentar outro?"
 
-# --- As funções generate_gemini_exercise e generate_gemini_feedback AGORA CHAMAM AS SIMULADAS ---
-# Removido o import google.generativeai as genai no início.
-# Comentadas as linhas de configuração da API.
-# As chamadas a model.generate_content foram substituídas por chamadas às funções simuladas.
-
-
 def generate_gemini_exercise(difficulty_area, user_age, user_difficulties):
-    return generate_simulated_exercise(difficulty_area) # Chamar a função simulada
+    return generate_simulated_exercise(difficulty_area) 
 
 def generate_gemini_feedback(performance, exercise_name, user_response, expected_answer):
-    return generate_simulated_feedback(performance, exercise_name, user_response, expected_answer) # Chamar a função simulada
+    return generate_simulated_feedback(performance, exercise_name, user_response, expected_answer) 
 
 
 def update_performance_history(exercise_name, domain, result):
@@ -375,6 +379,32 @@ with st.container():
         """, unsafe_allow_html=True
     )
 
+# Este bloco verifica se o usuário está logado para exibir o dashboard.
+# Ele substitui o antigo "if current_page == main_dashboard"
+if "logged_in_user_name" not in st.session_state or not st.session_state.logged_in_user_name:
+    st.warning("Por favor, faça o login na página inicial para acessar o dashboard.")
+    if st.button("Ir para Página Inicial"):
+        # st.session_state.go_to_dashboard = False (já manipulado pela estrutura multi-page)
+        st.stop() # Interrompe a execução aqui. O Streamlit vai para a home automaticamente.
+    st.stop() # Interrompe a execução desta página se não estiver logado.
+
+# Se chegou até aqui, o usuário está logado.
+# Inicializa user_data APENAS SE AINDA NÃO FOI INICIALIZADO para esta sessão.
+# Isso garante que o nome do usuário vindo da inicial.py seja usado.
+if "user_data" not in st.session_state:
+    st.session_state.user_data = {
+        "nome": st.session_state.logged_in_user_name, # Usa o nome do login
+        "idade": "",
+        "dificuldades": [], 
+        "current_stage": "ask_age", # Começa o fluxo do chat a partir da idade
+        "active_exercise": None,     
+        "exercise_data": {},         
+        "performance_history": {}    
+    }
+# Mantenha esta checagem para pending_exercise_area separada da inicialização principal
+if "pending_exercise_area" not in st.session_state:
+    st.session_state.pending_exercise_area = None
+
 # EXIBIR O PAINEL DE PROGESSO PRIMEIRO (na barra lateral)
 display_progress_panel()
 
@@ -383,10 +413,12 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Primeiro contato ou continuação do fluxo
-if st.session_state.user_data["current_stage"] == "greeting":
-    send_message_to_clarear("Olá! Sou o ClareAR, seu assistente de reabilitação cognitiva. Para começarmos, qual é o seu nome?", with_audio_button=True)
-    st.session_state.user_data["current_stage"] = "ask_name"
+# Lógica do chat principal do dashboard
+# A partir daqui, as mensagens são processadas como um chat contínuo
+# A primeira mensagem dependerá do current_stage
+if st.session_state.user_data["current_stage"] == "ask_age" and not st.session_state.user_data["idade"]:
+    send_message_to_clarear(f"Olá, {st.session_state.user_data['nome']}! Bem-vindo(a) ao seu dashboard. Qual é a sua idade?", with_audio_button=True)
+    # st.session_state.user_data["current_stage"] permanece "ask_age" até que a idade seja digitada
 
 # Campo de entrada do usuário
 if prompt := st.chat_input("Digite sua mensagem..."):
@@ -395,12 +427,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     # Lógica de processamento da entrada do usuário
-    if st.session_state.user_data["current_stage"] == "ask_name":
-        st.session_state.user_data["nome"] = prompt.strip()
-        send_message_to_clarear(f"Muito prazer, {st.session_state.user_data['nome']}! Qual é a sua idade?", with_audio_button=True)
-        st.session_state.user_data["current_stage"] = "ask_age"
-
-    elif st.session_state.user_data["current_stage"] == "ask_age":
+    if st.session_state.user_data["current_stage"] == "ask_age":
         try:
             age = int(prompt.strip())
             st.session_state.user_data["idade"] = age
@@ -412,12 +439,13 @@ if prompt := st.chat_input("Digite sua mensagem..."):
     elif st.session_state.user_data["current_stage"] == "ask_difficulties":
         difficulties_input = [d.strip().lower() for d in prompt.split(',') if d.strip()]
         st.session_state.user_data["dificuldades"] = difficulties_input
-        st.session_state.user_info_collected = True
+        st.session_state.user_info_collected = True # Define que a info inicial foi coletada
         
         if difficulties_input:
             first_difficulty = difficulties_input[0]
             st.session_state.pending_exercise_area = first_difficulty 
             
+            # Ajuste de fluxo: se já disser 'sim' ou o tipo no input de dificuldades, avança
             if "sim" in prompt.lower() or any(area in prompt.lower() for area in ["memória", "atenção", "raciocínio", "orientação"]):
                 st.session_state.user_data["current_stage"] = "confirm_initial_exercise" 
                 st.rerun() 
@@ -436,7 +464,6 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             st.session_state.pending_exercise_area = None 
             
             with st.spinner(f"Gerando um exercício de {area_to_focus.capitalize()}..."):
-                # ALTERADO: Chamar função simulada
                 exercise_details = generate_simulated_exercise(area_to_focus)
             
             if exercise_details:
@@ -474,8 +501,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
                 is_correct = True
             if expected_answer_raw.isdigit() and user_response_lower.isdigit():
                 is_correct = (int(expected_answer_raw) == int(user_response_lower))
-            # Lógica de avaliação de sequências (mantida)
-            if exercise_data["domain"] in ["memória", "atenção", "raciocínio"] and ("sequência" in exercise_name.lower() or "contagem" in exercise_name.lower() or "sequência" in exercise_data["instructions"].lower() or "lógica" in exercise_name.lower() or "série" in exercise_name.lower()): # Adicionado "série"
+            if exercise_data["domain"] in ["memória", "atenção", "raciocínio"] and ("sequência" in exercise_name.lower() or "contagem" in exercise_name.lower() or "sequência" in exercise_data["instructions"].lower() or "lógica" in exercise_name.lower() or "série" in exercise_name.lower()): 
                 expected_seq = [s.strip().lower() for s in expected_answer_raw.replace(',', ' ').replace('.', ' ').split() if s.strip()]
                 user_seq = [s.strip().lower() for s in user_response_lower.replace(',', ' ').replace('.', ' ').split() if s.strip()]
                 
@@ -485,8 +511,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
         domain = exercise_data.get("domain", "desconhecido")
         
         with st.spinner("Analisando sua resposta e gerando feedback..."):
-            # ALTERADO: Chamar função simulada
-            feedback = generate_simulated_feedback(
+            feedback = generate_simulated_feedback( # ALTERADO: Chamar função simulada
                 "correct" if is_correct else "incorrect",
                 exercise_name,
                 user_response,
@@ -519,8 +544,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             area_to_focus = next((area for area in ["memória", "atenção", "raciocínio", "orientação"] if area in user_input_lower), None)
             if area_to_focus:
                 with st.spinner(f"Gerando um exercício de {area_to_focus.capitalize()}..."):
-                    # ALTERADO: Chamar função simulada
-                    exercise_details = generate_simulated_exercise(area_to_focus)
+                    exercise_details = generate_simulated_exercise(area_to_focus) # ALTERADO: Chamar função simulada
                 if exercise_details:
                     st.session_state.user_data["active_exercise"] = exercise_details["name"]
                     st.session_state.user_data["exercise_data"] = exercise_details
@@ -550,8 +574,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             area_to_focus = next((area for area in ["memória", "atenção", "raciocínio", "orientação"] if area in user_input_lower), None)
             if area_to_focus:
                 with st.spinner(f"Gerando um exercício de {area_to_focus.capitalize()}..."):
-                    # ALTERADO: Chamar função simulada
-                    exercise_details = generate_simulated_exercise(area_to_focus)
+                    exercise_details = generate_simulated_exercise(area_to_focus) # ALTERADO: Chamar função simulada
                 if exercise_details:
                     st.session_state.user_data["active_exercise"] = exercise_details["name"]
                     st.session_state.user_data["exercise_data"] = exercise_details
@@ -612,4 +635,4 @@ elif st.session_state.user_data["current_stage"] == "end_session":
     st.info("Para iniciar uma nova sessão, por favor, recarregue a página no seu navegador.")
 
     # Limpar o estado para uma nova sessão ao recarregar a página
-    # st.session_state.clear()"
+    # st.session_state.clear()
