@@ -2,7 +2,7 @@ import streamlit as st
 import random
 import time
 import os
-# import google.generativeai as genai # COMENTADO: Não precisamos do Gemini API por enquanto
+import google.generativeai as genai
 from gtts import gTTS 
 import io 
 import pandas as pd
@@ -99,7 +99,7 @@ st.markdown(
         padding: 20px;
         border-right: 1px solid rgba(0,0,0,0.05);
     }
-    .stSidebar h1, .stSidebar h2, .stSidebar h3, .stSidebar h4, .stSidebar h6 { 
+    .stSidebar h1, .stSidebar h2, .stSidebar h3, .stSidebar h4, st.stSidebar h6 { 
         color: var(--text-color-dark);
     }
     .stSidebar .stDataFrame {
@@ -163,13 +163,15 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Configuração da API do Gemini (COMENTADO PARA DESATIVAR) ---
-# api_key = os.getenv("GOOGLE_API_KEY")
-# if not api_key:
-#     st.error("Chave de API do Google Gemini não encontrada! (INTEGRAÇÃO DA IA DESATIVADA TEMPORARIAMENTE)")
-#     st.stop() 
-# genai.configure(api_key=api_key)
-# model = genai.GenerativeModel('gemini-1.5-flash-latest') 
+# --- Configuração da API do Gemini ---
+api_key = os.getenv("GOOGLE_API_KEY")
+
+if not api_key:
+    st.error("Chave de API do Google Gemini não encontrada! Por favor, defina a variável de ambiente GOOGLE_API_KEY no seu terminal Codespaces.")
+    st.stop() 
+
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-1.5-flash-latest') 
 
 # --- Inicialização do Estado da Sessão (Crucial para Streamlit!) ---
 if "messages" not in st.session_state:
@@ -236,52 +238,124 @@ def send_message_to_clarear(message_content, role="ClareAR", with_audio_button=T
     st.session_state.messages.append({"role": role, "content": message_content})
     
 
-# --- Funções de Simulação de IA (NOVA Seção para testes sem API) ---
-def generate_simulated_exercise(difficulty_area):
-    """
-    Simula a geração de um exercício por IA, sem chamar a API.
-    Retorna exercícios fixos para fins de demonstração.
-    """
-    exercises_by_domain = {
-        "memória": [
-            {"name": "Sequência de Palavras Simples", "instructions": "Memorize a sequência de palavras.", "content": "Sol, Céu, Flor, Rio", "domain": "memória", "expected_answer": "sol, céu, flor, rio"},
-            {"name": "Lembre-se da Lista de Compras", "instructions": "Memorize a lista e depois digite-a.", "content": "Pão, Leite, Ovos, Café, Frutas", "domain": "memória", "expected_answer": "pão, leite, ovos, café, frutas"},
-        ],
-        "atenção": [
-            {"name": "Contagem de Vogais", "instructions": "Quantas vogais (a, e, i, o, u) existem na frase a seguir?", "content": "A águia voa alto sobre a montanha.", "domain": "atenção", "expected_answer": "12"},
-            {"name": "Encontre o Número Faltante", "instructions": "Qual número está faltando na sequência: 1, 2, 3, __, 5, 6?", "content": "1, 2, 3, __, 5, 6", "domain": "atenção", "expected_answer": "4"},
-        ],
-        "raciocínio": [
-            {"name": "Charada Básica", "instructions": "O que é, o que é: Anda e não tem pés, voa e não tem asas?", "content": "O que é, o que é: Anda e não tem pés, voa e não tem asas?", "domain": "raciocínio", "expected_answer": "fumaça"},
-            {"name": "Padrão Numérico Simples", "instructions": "Continue a sequência lógica: 3, 6, 9, 12, __?", "content": "3, 6, 9, 12, __?", "domain": "raciocínio", "expected_answer": "15"},
-        ],
-        "orientação": [
-            {"name": "Orientação Temporal", "instructions": "Qual é o dia da semana hoje?", "content": "Qual é o dia da semana hoje?", "domain": "orientação", "expected_answer": time.strftime("%A").lower()}, # Resposta dinâmica
-            {"name": "Orientação Espacial", "instructions": "Em que cidade você está agora?", "content": "Em que cidade você está agora?", "domain": "orientação", "expected_answer": "recife"} # Exemplo, adaptar
-        ]
-    }
-    return random.choice(exercises_by_domain.get(difficulty_area.lower(), exercises_by_domain["memória"])) # Fallback para memória
-
-def generate_simulated_feedback(performance, exercise_name, user_response, expected_answer):
-    """
-    Simula feedback, sem chamar a API.
-    """
-    if performance == "correct":
-        return f"Parabéns! Você acertou o exercício '{exercise_name}'. Excelente desempenho! Sua resposta '{user_response}' está correta."
-    else:
-        return f"Tudo bem, às vezes erramos! Você respondeu '{user_response}', mas a resposta esperada era '{expected_answer}'. A prática leva à perfeição. Que tal tentar outro?"
-
-# --- As funções generate_gemini_exercise e generate_gemini_feedback AGORA CHAMAM AS SIMULADAS ---
-# Removido o import google.generativeai as genai no início.
-# Comentadas as linhas de configuração da API.
-# As chamadas a model.generate_content foram substituídas por chamadas às funções simuladas.
-
+# --- Funções do Chatbot e Integração com Gemini ---
 
 def generate_gemini_exercise(difficulty_area, user_age, user_difficulties):
-    return generate_simulated_exercise(difficulty_area) # Chamar a função simulada
+    """
+    Gera um exercício usando a API do Google Gemini.
+    """
+    # NOVO: Adicionado exemplos específicos de exercícios para variar o conteúdo
+    exercise_examples = {
+        "memória": [
+            "Sequência de Palavras (ex: 'mesa, casa, livro, carro')",
+            "Lembre-se de uma lista de itens do dia a dia",
+            "Memorização de uma pequena história ou fato"
+        ],
+        "atenção": [
+            "Contagem de Letras em uma frase (ex: 'quantas letras A existem na frase X')",
+            "Encontre a palavra diferente em uma lista",
+            "Tarefa de Stroop (cores e palavras)" # Embora complexo sem UI, a IA pode descrever
+        ],
+        "raciocínio": [
+            "Charadas lógicas (ex: 'O que é, o que é: Tem olhos, mas não vê? Resposta: Agulha')",
+            "Series numéricas ou de palavras (ex: 'continue a sequência: 2, 4, 8, __')",
+            "Problemas de lógica simples"
+        ],
+        "orientação": [
+            "Perguntas sobre tempo (dia da semana, mês, ano)",
+            "Perguntas sobre localização (cidade, estado, país)",
+            "Perguntas sobre rotinas diárias"
+        ]
+    }
+    
+    # Selecionar um exemplo aleatório para a área específica
+    selected_example = random.choice(exercise_examples.get(difficulty_area, ["Perguntas gerais."]))
+
+    prompt = f"""
+    Crie um exercício de reabilitação cognitiva para um paciente com encefalopatia hepática leve a moderada.
+    O foco principal deve ser em: **{difficulty_area}**.
+    O paciente tem {user_age} anos e relatou dificuldades em: {', '.join(user_difficulties)}.
+    
+    Gere um exercício do tipo: "{selected_example}".
+    
+    O exercício DEVE SER APENAS TEXTO. NÃO INCLUA NENHUMA REFERÊNCIA A IMAGENS, OBJETOS VISUAIS, OU LISTAS DE ITENS PARA SEREM OBSERVADAS VISUALMENTE.
+    O exercício deve ser adequado para interação via chat, fácil de entender e responder.
+    A "Resposta Esperada" deve ser precisa para validação.
+    
+    Formato da saída esperada (estritamente, SEM NENHUM TEXTO ADICIONAL NO INÍCIO OU FIM. Use apenas os campos abaixo):
+    Nome do Exercício: [Nome do Exercício]
+    Instruções: [Instruções claras e concisas para o paciente]
+    Conteúdo do Exercício: [Aqui coloque o texto principal do exercício, como a sequência de números/palavras, a pergunta, a charada, etc. Este é o que o usuário vai responder. Mantenha-o conciso e direto.]
+    Tipo de Exercício: [Memória/Atenção/Raciocínio/Orientação]
+    Resposta Esperada: [Resposta ou lógica para validar o exercício (SEMPRE FORNEÇA A RESPOSTA FINAL AQUI. Para sequências, a sequência correta. Para perguntas, a resposta correta.)]
+    """
+    try:
+        response = model.generate_content(prompt)
+        text_response = response.text.strip() 
+        
+        text_response = text_response.split("Formato da saída esperada (estritamente, SEM NENHUM TEXTO ADICIONAL NO INÍCIO OU FIM. Use apenas os campos abaixo):")[-1].strip()
+        
+        name_start = text_response.find("Nome do Exercício:")
+        instructions_start = text_response.find("Instruções:")
+        content_start = text_response.find("Conteúdo do Exercício:") 
+        type_start = text_response.find("Tipo de Exercício:")
+        answer_start = text_response.find("Resposta Esperada:")
+
+        name = "Exercício Gerado"
+        instructions = "Siga as instruções."
+        exercise_content = "" 
+        exercise_type = difficulty_area
+        expected_answer = ""
+
+        if name_start != -1:
+            end_idx = instructions_start if instructions_start != -1 else len(text_response)
+            name = text_response[name_start + len("Nome do Exercício:"):end_idx].strip()
+
+        if instructions_start != -1:
+            end_idx = content_start if content_start != -1 else type_start if type_start != -1 else len(text_response)
+            instructions = text_response[instructions_start + len("Instruções:"):end_idx].strip()
+        
+        if content_start != -1: 
+            end_idx = type_start if type_start != -1 else answer_start if answer_start != -1 else len(text_response)
+            exercise_content = text_response[content_start + len("Conteúdo do Exercício:"):end_idx].strip()
+
+        if type_start != -1:
+            end_idx = answer_start if answer_start != -1 else len(text_response)
+            exercise_type = text_response[type_start + len("Tipo de Exercício:"):end_idx].strip().lower()
+
+        if answer_start != -1:
+            expected_answer = text_response[answer_start + len("Resposta Esperada:"):].strip()
+
+        return {
+            "name": name, 
+            "instructions": instructions, 
+            "content": exercise_content, 
+            "domain": exercise_type,
+            "expected_answer": expected_answer 
+        }
+    except Exception as e:
+        st.error(f"Erro ao gerar exercício com Gemini: {e}. Isso pode acontecer se a resposta do Gemini não estiver no formato esperado. Por favor, tente novamente.")
+        return None
 
 def generate_gemini_feedback(performance, exercise_name, user_response, expected_answer):
-    return generate_simulated_feedback(performance, exercise_name, user_response, expected_answer) # Chamar a função simulada
+    """
+    Gera feedback motivacional e construtivo usando a API do Google Gemini.
+    """
+    prompt = f"""
+        O paciente acabou de {'acertar' if performance == 'correct' else 'errar'} o exercício '{exercise_name}'.
+        A resposta dele foi '{user_response}'.
+        A resposta esperada era '{expected_answer}'.
+        Crie uma mensagem curta (1-3 frases), {'motivacional e encorajadora para ele, reforçando o bom desempenho e incentivando a continuar.' if performance == 'correct' else 'encorajadora, explicando que errar faz parte do aprendizado e sugerindo que tente novamente ou continue. Mantenha um tone otimista e de apoio.'}
+        """
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Erro ao gerar feedback com Gemini: {e}")
+        if performance == "correct":
+            return f"Parabéns! Você mandou muito bem no exercício '{exercise_name}'!"
+        else:
+            return f"Não se preocupe! O exercício '{exercise_name}' pode ser um pouco desafiador. Que tal tentar de novo ou um diferente?"
 
 
 def update_performance_history(exercise_name, domain, result):
@@ -418,9 +492,10 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             first_difficulty = difficulties_input[0]
             st.session_state.pending_exercise_area = first_difficulty 
             
+            # NOVO: Transição direta para gerar exercício se já disser 'sim' ou tipo de exercício
             if "sim" in prompt.lower() or any(area in prompt.lower() for area in ["memória", "atenção", "raciocínio", "orientação"]):
-                st.session_state.user_data["current_stage"] = "confirm_initial_exercise" 
-                st.rerun() 
+                st.session_state.user_data["current_stage"] = "confirm_initial_exercise" # Reusa o estágio
+                st.rerun() # Força o rerun para processar a confirmação/tipo imediatamente
             else:
                 send_message_to_clarear(f"Ótimo! Entendi que você quer focar em **{', '.join(difficulties_input)}**.", with_audio_button=True)
                 time.sleep(1)
@@ -431,13 +506,16 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             st.session_state.user_data["current_stage"] = "ask_difficulties" 
 
     elif st.session_state.user_data["current_stage"] == "confirm_initial_exercise":
-        if "sim" in prompt.lower() and st.session_state.pending_exercise_area: 
+        if "sim" in prompt.lower() and st.session_state.pending_exercise_area: # Garante que pending_exercise_area está preenchido
             area_to_focus = st.session_state.pending_exercise_area 
-            st.session_state.pending_exercise_area = None 
+            st.session_state.pending_exercise_area = None # Limpa a área pendente
             
             with st.spinner(f"Gerando um exercício de {area_to_focus.capitalize()}..."):
-                # ALTERADO: Chamar função simulada
-                exercise_details = generate_simulated_exercise(area_to_focus)
+                exercise_details = generate_gemini_exercise(
+                    area_to_focus, 
+                    st.session_state.user_data["idade"], 
+                    st.session_state.user_data["dificuldades"]
+                )
             
             if exercise_details:
                 st.session_state.user_data["active_exercise"] = exercise_details["name"]
@@ -474,8 +552,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
                 is_correct = True
             if expected_answer_raw.isdigit() and user_response_lower.isdigit():
                 is_correct = (int(expected_answer_raw) == int(user_response_lower))
-            # Lógica de avaliação de sequências (mantida)
-            if exercise_data["domain"] in ["memória", "atenção", "raciocínio"] and ("sequência" in exercise_name.lower() or "contagem" in exercise_name.lower() or "sequência" in exercise_data["instructions"].lower() or "lógica" in exercise_name.lower() or "série" in exercise_name.lower()): # Adicionado "série"
+            if exercise_data["domain"] in ["memória", "atenção", "raciocínio"] and ("sequência" in exercise_name.lower() or "contagem" in exercise_name.lower() or "sequência" in exercise_data["instructions"].lower() or "lógica" in exercise_name.lower()): 
                 expected_seq = [s.strip().lower() for s in expected_answer_raw.replace(',', ' ').replace('.', ' ').split() if s.strip()]
                 user_seq = [s.strip().lower() for s in user_response_lower.replace(',', ' ').replace('.', ' ').split() if s.strip()]
                 
@@ -485,8 +562,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
         domain = exercise_data.get("domain", "desconhecido")
         
         with st.spinner("Analisando sua resposta e gerando feedback..."):
-            # ALTERADO: Chamar função simulada
-            feedback = generate_simulated_feedback(
+            feedback = generate_gemini_feedback(
                 "correct" if is_correct else "incorrect",
                 exercise_name,
                 user_response,
@@ -496,6 +572,7 @@ if prompt := st.chat_input("Digite sua mensagem..."):
         send_message_to_clarear(feedback, with_audio_button=True)
         update_performance_history(exercise_name, domain, "correct" if is_correct else "incorrect")
         
+        # Oferecer opção de finalizar sessão aqui
         send_message_to_clarear("O que você gostaria de fazer a seguir? Podemos tentar outro exercício ou finalizar a sessão.", with_audio_button=True)
         st.session_state.user_data["current_stage"] = "menu"
         st.session_state.user_data["active_exercise"] = None 
@@ -513,14 +590,17 @@ if prompt := st.chat_input("Digite sua mensagem..."):
 
         elif "finalizar" in user_input_lower or "sair" in user_input_lower or "encerrar" in user_input_lower:
             st.session_state.user_data["current_stage"] = "end_session"
-            st.rerun() 
+            st.rerun() # Usando st.rerun()
             
         elif any(area in user_input_lower for area in ["memória", "atenção", "raciocínio", "orientação"]):
             area_to_focus = next((area for area in ["memória", "atenção", "raciocínio", "orientação"] if area in user_input_lower), None)
             if area_to_focus:
                 with st.spinner(f"Gerando um exercício de {area_to_focus.capitalize()}..."):
-                    # ALTERADO: Chamar função simulada
-                    exercise_details = generate_simulated_exercise(area_to_focus)
+                    exercise_details = generate_gemini_exercise(
+                        area_to_focus, 
+                        st.session_state.user_data["idade"], 
+                        st.session_state.user_data["dificuldades"]
+                    )
                 if exercise_details:
                     st.session_state.user_data["active_exercise"] = exercise_details["name"]
                     st.session_state.user_data["exercise_data"] = exercise_details
@@ -550,8 +630,11 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             area_to_focus = next((area for area in ["memória", "atenção", "raciocínio", "orientação"] if area in user_input_lower), None)
             if area_to_focus:
                 with st.spinner(f"Gerando um exercício de {area_to_focus.capitalize()}..."):
-                    # ALTERADO: Chamar função simulada
-                    exercise_details = generate_simulated_exercise(area_to_focus)
+                    exercise_details = generate_gemini_exercise(
+                        area_to_focus, 
+                        st.session_state.user_data["idade"], 
+                        st.session_state.user_data["dificuldades"]
+                    )
                 if exercise_details:
                     st.session_state.user_data["active_exercise"] = exercise_details["name"]
                     st.session_state.user_data["exercise_data"] = exercise_details
@@ -612,4 +695,5 @@ elif st.session_state.user_data["current_stage"] == "end_session":
     st.info("Para iniciar uma nova sessão, por favor, recarregue a página no seu navegador.")
 
     # Limpar o estado para uma nova sessão ao recarregar a página
-    # st.session_state.clear()"
+    # st.session_state.clear()
+    
